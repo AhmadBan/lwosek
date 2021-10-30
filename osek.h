@@ -2,6 +2,7 @@
 #define OSEK_H
 #include "common.h"
 #include "osek_types.h"
+#include "osek_task.h"
 typedef enum{
 	E_OK=0,
 	E_OS_ACCESS  = 1, 

@@ -1,7 +1,7 @@
 #include "osek_types.h"
 #include "osek_queue.h"
 /***************** Allocate memory for holding Task pointer in a Queue*********************/
-#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) Task_t queue_Q##prio[queue_size];		
+#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) Task_t* queue_Q##prio[queue_size];		
 #include "osek_queue_def.h"
 #undef POSEK_QUEUE_CREATE
 

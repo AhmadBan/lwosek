@@ -1,6 +1,92 @@
 #include "common.h"
 #include "osek.h"
 #include "osek_types.h"
+#include "osek_task.h"
+#include "osek_queue.h"
+#define LOG2(x) (32U - __clz(x))
+
+uint64_t timerTick = 0;
+
+Task_t* volatile osek_currTask; //pointer to current task running
+Task_t* volatile osek_nextTask; //pointer to next task running
+
+Task_t* osek_queues[32 + 1]; /* array of threads started so far */
+
+uint32_t osek_readySet; /* bitmask of threads that are ready to run */
+uint32_t osek_PreemptedSet; /* bitmask of threads that are ready to run */
+//uint32_t OS_delayedSet; /* bitmask of threads that are delayed */
+
+Task_t osek_idleTask;
+
+OsekQueue_t* volatile osek_currQueue;
+OsekQueue_t* volatile osek_nextQueue;
+OsekQueue_t* volatile osek_PremptedQueue;
+
+#define TASK_NAME(task) OSEK_TASK_##task
+
+static StatusType pushToQueue(OsekQueue_t* oq, TaskType taskID) {
+	StatusType result=E_OK;
+	if (oq->queue_size == oq->max_queue_Size)
+	{
+		result = E_OS_LIMIT;
+	}
+	else {
+		oq->tasks[oq->head++] = oq->tasks[taskID];
+		oq->queue_size++;
+	}
+	
+	return result;
+}
+
+static Task_t* popFromQueue(OsekQueue_t* oq) {
+	Task_t* res=NULL;
+	if (oq->queue_size > 0)
+	{
+		res=oq->tasks[--oq->head];
+		oq->queue_size--;
+	}
+	
+	return res;
+}
+static Task_t* topFromQueue(OsekQueue_t* oq) {
+	Task_t* res = NULL;
+	if (oq->queue_size > 0)
+	{
+		res = oq->tasks[oq->head];
+	}
+
+	return res;
+}
+
+static void dispatcher() {
+	OsekQueue_t* oq = osek_nextQueue;
+	Task_t* taskStruct=NULL;
+	while (1) {
+		taskStruct = popFromQueue(oq);
+		taskStruct->task();
+		if (oq->queue_size ==0) {
+			osek_readySet &= ~(1<<oq->prio);
+		}
+		Schedule();
+	}
+	
+}
+void initQueue(void){
+	pushToQueue(&Q0, ID_idle);
+}
+
+void initConfigureINTC() {
+	/* set the PendSV interrupt priority to the lowest level 0xFF */
+	*(uint32_t volatile*)0xE000ED20 |= (0xFFU << 16);
+}
+
+
+void InitOS() {
+	initQueue();
+
+	//Interrupt controller configuration
+	initConfigureINTC();
+}
 /*
 Parameter (In): 
 TaskID Task reference 
@@ -24,7 +110,11 @@ Conformance:  BCC1, BCC2
 
 */
 StatusType ActivateTask ( TaskType TaskID ) {
-	
+	if(TaskID>=MAX_TASK)
+	{
+		return E_OS_LIMIT;
+	}
+	return pushToQueue(tasks[TaskID].q,TaskID);
 }
 
 /*
