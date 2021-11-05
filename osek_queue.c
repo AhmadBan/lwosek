@@ -9,13 +9,13 @@
 /***************** allocate all stack for queues********************************************************/
 
 
-#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) uint32_t sp_##prio[stk_size/4*4+1];
+#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) uint32_t sp_##prio[stk_size];
 #include "osek_queue_def.h"
 #undef POSEK_QUEUE_CREATE
 
 
 /***************** define all queues ********************************************************/
-#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) OsekQueue_t Q##prio={ queue_Q##prio,prio,0,0,queue_size,sp_##prio};
+#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) OsekQueue_t Q##prio={sp_##prio ,queue_Q##prio,prio,0,0,queue_size};
 #include "osek_queue_def.h"
 #undef POSEK_QUEUE_CREATE
 

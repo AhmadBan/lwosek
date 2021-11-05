@@ -13,7 +13,8 @@ typedef enum{
 #define OSEK_TASK_CREATE(name,prio,maxAct) ID_##name,
 #include "osek_task_def.h"
 #undef OSEK_TASK_CREATE
-	MAX_TASK
+	MAX_TASK,
+	INVALID_TASK
 }TaskType;
 typedef TaskType* TaskRefType;
 extern Task_t tasks[MAX_TASK];

@@ -3,35 +3,21 @@
 #include "common.h"
 #include "osek_types.h"
 #include "osek_task.h"
-typedef enum{
-	E_OK=0,
-	E_OS_ACCESS  = 1, 
-  E_OS_CALLEVEL  = 2, 
-  E_OS_ID  = 3, 
-  E_OS_LIMIT  = 4, 
-  E_OS_NOFUNC  = 5, 
-  E_OS_RESOURCE  = 6, 
-  E_OS_STATE  = 7, 
-  E_OS_VALUE  = 8,
-	E_OS_LOSTCTRL=9
-}StatusType;
-
-typedef enum{
-RUNNING=0,  //  Constant of data type TaskStateType for task state running. 
-WAITING,  //•  Constant of data type TaskStateType for task state waiting. 
-READY,   //•  Constant of data type TaskStateType for task state ready. 
-SUSPENDED,  //•  Constant of data type TaskStateType for task state suspended. 
-INVALID_TASK //• Constant of data type TaskType for a not defined task. 
-	
-}TaskStateType;
-typedef TaskStateType* TaskStateRefType;
-typedef enum {
-	OSDEFAULTAPPMODE= 1,
-}AppModeType;
-
-#include "common.h"
+#include "osek_queue.h"
+#include "osek_port.h"
 #include "osek.h"
-#include "osek_types.h"
+
+
+
+
+
+extern Task_t* volatile osek_currTask; //pointer to current task running
+extern Task_t* volatile osek_nextTask; //pointer to next task running
+extern OsekQueue_t* volatile osek_currQueue;
+extern OsekQueue_t* volatile osek_nextQueue;
+void InitOS();
+void dispatcher() ;
+
 /*
 Parameter (In): 
 TaskID Task reference 

@@ -3,19 +3,19 @@
 /**********************************************/
 //sum of activations of all tasks with the same priority
 #define PRIORITY_0_Q_SIZE 1
-#define OS_PRIORITY_0_MAX_STACK_SIZE 20
+#define OS_PRIORITY_0_MAX_STACK_SIZE 128
 
 #define PRIORITY_1_Q_SIZE 2
-#define OS_PRIORITY_1_MAX_STACK_SIZE 20
+#define OS_PRIORITY_1_MAX_STACK_SIZE 128
 
 #define PRIORITY_2_Q_SIZE 3
-#define OS_PRIORITY_2_MAX_STACK_SIZE 30
+#define OS_PRIORITY_2_MAX_STACK_SIZE 128
 
 #define PRIORITY_3_Q_SIZE 4
-#define OS_PRIORITY_3_MAX_STACK_SIZE 50
+#define OS_PRIORITY_3_MAX_STACK_SIZE 128
 
 #define PRIORITY_4_Q_SIZE 6
-#define OS_PRIORITY_4_MAX_STACK_SIZE 40
+#define OS_PRIORITY_4_MAX_STACK_SIZE 128
 
 #define PRIORITY_5_Q_SIZE NOT_USED
 #define OS_PRIORITY_5_MAX_STACK_SIZE NOT_USED
