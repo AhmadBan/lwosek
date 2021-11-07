@@ -15,7 +15,7 @@
 
 
 /***************** define all queues ********************************************************/
-#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) OsekQueue_t Q##prio={sp_##prio ,queue_Q##prio,prio,0,0,queue_size};
+#define POSEK_QUEUE_CREATE(prio,queue_size,stk_size) OsekQueue_t Q##prio={sp_##prio ,queue_Q##prio,prio,0,0,0,queue_size};
 #include "osek_queue_def.h"
 #undef POSEK_QUEUE_CREATE
 

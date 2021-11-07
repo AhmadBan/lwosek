@@ -3,7 +3,7 @@
 #include "common.h"
 #include "common.h"
 #include "osek_types.h"
-#include "osek_queue.h"
+
 
 #define OSEK_TASK_CREATE(name,prio,maxAct) DeclareTask(name)
 
@@ -16,6 +16,19 @@ typedef enum{
 	MAX_TASK,
 	INVALID_TASK
 }TaskType;
+typedef struct OsekQueue_t OsekQueue_t;
+typedef void (*OsekTask_t)(void);
+typedef struct {
+	OsekTask_t task; //pointer to function of task
+	OsekQueue_t* q;
+	TaskType taskId;
+	uint8_t prio; //priority of task
+	uint8_t maxAct;//maximum activation
+	uint8_t noAct;//number of activation
+	TaskStateType state;
+
+}Task_t;
+
 typedef TaskType* TaskRefType;
 extern Task_t tasks[MAX_TASK];
 #endif

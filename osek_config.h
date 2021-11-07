@@ -1,5 +1,7 @@
 
-
+//Zero is highest interrupt priority and it decreases with increasing value
+#define OSEK_INTERRUPT_LEVEL 14
+#define OSEK_LEAST_INTERRUPT_LEVEL 15
 /**********************************************/
 //sum of activations of all tasks with the same priority
 #define PRIORITY_0_Q_SIZE 1

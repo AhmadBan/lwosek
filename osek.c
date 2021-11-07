@@ -1,7 +1,7 @@
 #include "common.h"
 #include "osek.h"
-
-#define LOG2(x) (31U - __clz(x))
+#include "osek_port.h"
+#define FIND_READY_QUEUE(x) (31U - __clz(x))
 
 uint64_t timerTick = 0;
 
@@ -9,10 +9,12 @@ Task_t* volatile osek_currTask; //pointer to current task running
 Task_t* volatile osek_nextTask; //pointer to next task running
 
 
-uint32_t osek_readySet; /* bitmask of threads that are ready to run */
-uint32_t osek_PreemptedSet; /* bitmask of threads that are ready to run */
+uint8_t DisableAllInterrupts_count=0;
+uint8_t SuspendAllInterrupts_count=0;
+uint8_t SuspendOSInterrupts_count=0;
 
-Task_t osek_idleTask;
+uint32_t osek_readySet; /* bitmask of threads that are ready to run */
+
 
 OsekQueue_t* osek_queues[]= /* array of threads started so far */
 {
@@ -22,9 +24,8 @@ OsekQueue_t* osek_queues[]= /* array of threads started so far */
 };
 OsekQueue_t* volatile osek_currQueue;
 OsekQueue_t* volatile osek_nextQueue;
-OsekQueue_t* volatile osek_PremptedQueue;
 
-#define TASK_NAME(task) OSEK_TASK_##task
+
 
 static StatusType pushToQueue(OsekQueue_t* oq, TaskType taskID) {
 	StatusType result=E_OK;
@@ -32,7 +33,10 @@ static StatusType pushToQueue(OsekQueue_t* oq, TaskType taskID) {
 	{
 		//every task or category 2 isr can call activateTask which fills oq->tasks so it is a shared resource which must be inside critical section
 		DisableAllInterrupts();
-		oq->tasks[oq->head++] = &tasks[taskID];
+		oq->tasks[oq->tail] = &tasks[taskID];
+		oq->tail++;
+		if(oq->tail==oq->max_queue_Size)
+			oq->tail=0;
 		oq->queue_size++;
 		EnableAllInterrupts();
 		
@@ -49,7 +53,10 @@ static Task_t* popFromQueue(OsekQueue_t* oq) {
 	if (oq->queue_size > 0)
 	{
 		DisableAllInterrupts();
-		res=oq->tasks[--oq->head];
+		res=oq->tasks[oq->head];
+		oq->head++;
+		if(oq->head==oq->max_queue_Size)
+			oq->head=0;
 		oq->queue_size--;
 		EnableAllInterrupts();
 	}
@@ -125,15 +132,11 @@ void initQueue(void){
 	//ActivateTask(ID_idle);
 }
 
-void initConfigureINTC() {
-	/* set the PendSV interrupt priority to the lowest level 0xFF */
-	*(uint32_t volatile*)0xE000ED20 |= (0xFFU << 16);
-}
-
-
 void InitOS() {
 	initQueue();
-
+	osek_readySet |= (1<<tasks[ID_idle].q->prio);
+	tasks[ID_idle].state=READY;
+	pushToQueue(tasks[ID_idle].q,ID_idle);
 	//Interrupt controller configuration
 	initConfigureINTC();
 }
@@ -251,7 +254,8 @@ Conformance:  BCC1, BCC2
 StatusType ChainTask ( TaskType TaskID ){
 	
 	TerminateTask();
-	ActivateTask(TaskID);
+	return ActivateTask(TaskID);
+	
 	
 }
 /*
@@ -277,11 +281,13 @@ Extended:  •  Call at interrupt level, E_OS_CALLEVEL
 Conformance:  BCC1, BCC2 */
 StatusType Schedule ( void ){
 
-	osek_nextQueue = osek_queues[LOG2(osek_readySet)];
+	osek_nextQueue = osek_queues[FIND_READY_QUEUE(osek_readySet)];
+	//check osek_nextQueue against null but it adds overhead on schedule which has a a high recurrence in system
 
 	if(osek_nextQueue!=osek_currQueue){
 		activateCSInt();
 	}
+	return E_OK;
 }
 
 
@@ -340,6 +346,182 @@ StatusType GetTaskState ( TaskType TaskID, TaskStateRefType State ) {
 		return E_OK;
 }
 
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service restores the state saved by DisableAllInterrupts. 
+Particularities:  The service may be called from an ISR category 1 and category 
+2 and from the task level, but not from hook routines. 
+This service is a counterpart of DisableAllInterruptsservice, 
+which has to be called before, and its aim is the completion of 
+the critical section of code. No API service calls are allowed 
+within this critical section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. Usually, this service 
+enables recognition of interrupts by the central processing unit. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void EnableAllInterrupts( void ){
+	DisableAllInterrupts_count--;
+	if(DisableAllInterrupts_count==0)
+	{
+		EnableAllInterrupts_uC();
+	}
+	
+}
+
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service disables all interrupts for which the hardware 
+supports disabling. The state before is saved for the 
+EnableAllInterruptscall. 
+Particularities:  The service may be called from an ISR category 1 and category 
+2 and from the task level, but not from hook routines. 
+This service is intended to start a critical section of the code. 
+This section shall be finished by calling the EnableAllInterrupts
+service. No API service calls are allowed within this critical 
+section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. Usually, this service 
+disables recognition of interrupts by the central processing unit. 
+Note that this service does not support nesting. If nesting is 
+needed for critical sections e.g. for libraries 
+SuspendOSInterrupts/ResumeOSInterruptsor 
+SuspendAllInterrupt/ResumeAllInterruptsshould be used. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void DisableAllInterrupts ( void ) {
+	DisableAllInterrupts_count++;
+	DisableAllInterrupts_uC();
+	
+	
+}
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service restores the recognition status of all interrupts 
+saved by the SuspendAllInterruptsservice. 
+Particularities:  The service may be called from an ISR category 1 and category 
+2, from alarm-callbacks and from the task level, but not from all 
+hook routines. 
+This service is the counterpart of SuspendAllInterruptsservice, 
+which has to have been called before, and its aim is the 
+completion of the critical section of code. No API service calls 
+beside  SuspendAllInterrupts/ResumeAllInterruptspairs and 
+SuspendOSInterrupts/ResumeOSInterruptspairs are allowed 
+within this critical section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. 
+SuspendAllInterrupts/ResumeAllInterruptscan be nested. In 
+case of nesting pairs of the calls SuspendAllInterruptsand 
+ResumeAllInterruptsthe interrupt recognition status saved by 
+the first call of SuspendAllInterruptsis restored by the last call 
+of the ResumeAllInterruptsservice. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void ResumeAllInterrupts ( void ){
+	SuspendAllInterrupts_count--;
+	if(SuspendAllInterrupts_count==0)
+	{
+		ResumeAllInterrupts_uC();
+	}
+}
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service saves the recognition status ofall interrupts and 
+disables all interrupts for  which the hardware supports 
+disabling. 
+Particularities:  The service may be called from an ISR category 1 and category 
+2, from alarm-callbacks and from the task level, but not from all 
+hook routines. 
+This service is intended to protect a critical section of code from 
+interruptions of any kind. Thissection shall be finished by 
+calling the ResumeAllInterruptsservice. No API service calls 
+beside  SuspendAllInterrupts/ResumeAllInterruptspairs and 
+SuspendOSInterrupts/ResumeOSInterruptspairs are allowed 
+within this critical section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void SuspendAllInterrupts ( void ) {
+	SuspendAllInterrupts_count++;
+	SuspendAllInterrupts_uC();
+}
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service restores the recognition status of interrupts saved 
+by the SuspendOSInterruptsservice. 
+Particularities:  The service may be called from an ISR category 1 and category 
+2 and from the task level, but not from hook routines. 
+This service is the counterpart of SuspendOSInterruptsservice, 
+which has to have been called before, and its aim is the 
+completion of the critical section of code. No API service calls 
+beside  SuspendAllInterrupts/ResumeAllInterruptspairs and 
+SuspendOSInterrupts/ResumeOSInterruptspairs are allowed 
+within this critical section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. 
+SuspendOSInterrupts/ResumeOSInterruptscan be nested. In 
+case of nesting pairs of the calls SuspendOSInterruptsand 
+ResumeOSInterruptsthe interrupt recognition status saved by 
+the first call of SuspendOSInterruptsis restored by the last call 
+of the ResumeOSInterruptsservice. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void ResumeOSInterrupts ( void ){
+	SuspendOSInterrupts_count--;
+	if(SuspendOSInterrupts_count==0)
+	{
+		ResumeOSInterrupts_uC();
+	}
+}
+/*
+Parameter (In):  none 
+Parameter (Out):  none 
+Description:  This service saves the recognition status of interrupts of 
+category 2 and disables the recognition of these interrupts. 
+Particularities:  The service may be called from an ISR and from the task level, 
+but not from hook routines. 
+This service is intended to protect a critical section of code. This 
+section shall be finished by calling the ResumeOSInterrupts
+service. No API service calls beside 
+SuspendAllInterrupts/ResumeAllInterruptspairs and 
+SuspendOSInterrupts/ResumeOSInterruptspairs are allowed 
+within this critical section. 
+The implementation should adapt this service to the target 
+hardware providing a minimum overhead. 
+It is intended only to disable interrupts of category 2. However, 
+if this is not possible in an efficient way more interrupts may be 
+disabled. 
+Status: 
+Standard:  •none 
+Extended:  •none 
+Conformance:  BCC1, BCC2
+*/
+void SuspendOSInterrupts ( void ) {
+	SuspendOSInterrupts_count++;
+	SuspendOSInterrupts_uC();
+	
+}
 /*
 Parameter (In): 
 Error error occurred 

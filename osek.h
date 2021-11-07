@@ -15,8 +15,8 @@ extern Task_t* volatile osek_currTask; //pointer to current task running
 extern Task_t* volatile osek_nextTask; //pointer to next task running
 extern OsekQueue_t* volatile osek_currQueue;
 extern OsekQueue_t* volatile osek_nextQueue;
-void InitOS();
-void dispatcher() ;
+void InitOS(void);
+void dispatcher(void) ;
 
 /*
 Parameter (In): 
