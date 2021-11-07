@@ -31,7 +31,8 @@ static StatusType pushToQueue(OsekQueue_t* oq, TaskType taskID) {
 	StatusType result=E_OK;
 	if (oq->queue_size < oq->max_queue_Size)
 	{
-		//every task or category 2 isr can call activateTask which fills oq->tasks so it is a shared resource which must be inside critical section
+		//every task or category 2 isr can call activateTask which fills 
+		//oq->tasks so it is a shared resource which must be inside critical section
 		DisableAllInterrupts();
 		oq->tasks[oq->tail] = &tasks[taskID];
 		oq->tail++;
@@ -171,6 +172,7 @@ StatusType ActivateTask ( TaskType TaskID ) {
 	//readySet is a shared resource which maintain all Queues status so it must be inside a critical section
 	DisableAllInterrupts();
 	osek_readySet |= (1<<tasks[TaskID].q->prio);
+	tasks[TaskID].noAct++;
 	tasks[TaskID].state=READY;
 	result=pushToQueue(tasks[TaskID].q,TaskID);
 	EnableAllInterrupts();
@@ -207,7 +209,13 @@ Conformance:  BCC1, BCC2
 StatusType TerminateTask ( void ) {
 	PostTaskHook();
 	DisableAllInterrupts();
-	popFromQueue(osek_currQueue)->state=SUSPENDED;
+	Task_t* task=popFromQueue(osek_currQueue);
+	task->noAct--;
+	if(task->noAct==0){
+		task->state=SUSPENDED;
+	}else{
+		task->state=READY;
+	}
 	EnableAllInterrupts();
 	Schedule();
 	return E_OK;
@@ -283,8 +291,9 @@ StatusType Schedule ( void ){
 
 	osek_nextQueue = osek_queues[FIND_READY_QUEUE(osek_readySet)];
 	//check osek_nextQueue against null but it adds overhead on schedule which has a a high recurrence in system
-
+	
 	if(osek_nextQueue!=osek_currQueue){
+		topFromQueue(osek_currQueue)->state=READY;//context switch must change state of current task from running to ready
 		activateCSInt();
 	}
 	return E_OK;
@@ -317,7 +326,6 @@ StatusType GetTaskID ( TaskRefType TaskID ) {
 		*TaskID=task->taskId;
 
 	}
-
 		return E_OK;
 }
 
@@ -609,14 +617,9 @@ Conformance:  BCC1, BCC2
 void StartOS(AppModeType Mode) {
 	StartupHook();
 	InitOS();
-	DisableAllInterrupts();
 	Schedule();
-	EnableAllInterrupts();
-
 	/* the following code should never execute */
 	ErrorHook(E_OS_LOSTCTRL);
-
-	
 }
 /*
 Parameter (In): 

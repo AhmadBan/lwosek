@@ -38,4 +38,3 @@ you can also add ` #include "osek.h" ` to each file where you want to use OSEK A
 * P: Partially supported.
 
 * TerminateTask can only be used in the body of the function Task and must not be used in nested function in the task.
-* 
